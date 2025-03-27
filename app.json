@@ -36,6 +36,15 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "7d2a69b6-ae8a-48c1-9ba8-afb7e861b91f"
+      }
+    },
+    "owner": "devapptime111"
   }
 }
