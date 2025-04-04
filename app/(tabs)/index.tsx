@@ -13,12 +13,12 @@ export default function ChatScreen() {
   const route = useRoute<ChatScreenRouteProp>();
   console.log(route.params);
 
-  const budget = route.params?.budget;
-  console.log(budget);
-
-  if (!budget) {
+  if (!route.params || !route.params.budget) {
     return <Text>Error: Budget is not defined</Text>;
   }
+
+  const budget = route.params.budget;
+  console.log(budget);
 
   const [transfers, setTransfers] = useState<Player[] | null>(null);
   const [loading, setLoading] = useState(true);

@@ -1,10 +1,21 @@
-import { Stack } from 'expo-router';
+// App.tsx
+import React from 'react';
+import { NavigationContainer } from '@react-navigation/native';
+import { createStackNavigator } from '@react-navigation/stack';
+import ChatScreen from './(tabs)/index';
+import TeamSelector from './(tabs)/team_selector';
 
-export default function RootLayout() {
+const Stack = createStackNavigator();
+
+function App() {
   return (
-    <Stack>
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="+not-found" />
-    </Stack>
+    <NavigationContainer>
+      <Stack.Navigator>
+        <Stack.Screen name="ChatScreen" component={ChatScreen} />
+        <Stack.Screen name="TeamSelector" component={TeamSelector} />
+      </Stack.Navigator>
+    </NavigationContainer>
   );
 }
+
+export default App;
