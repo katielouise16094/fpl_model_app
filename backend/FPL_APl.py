@@ -10,6 +10,8 @@ scaler_attacking = joblib.load("backend/scaler_attacking.pkl")
 
 # Sample FPL Players Database (for recommendations)
 df = pd.read_csv("backend/players.csv")
+print(df.head())  # Check the first few rows to see if data is loaded
+
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -32,13 +34,21 @@ def predict_team():
     free_transfers = data.get("free_transfers", 0)
     chips = data.get("chips", [])
 
-    df_defensive = df[df["element_type"].isin([1, 2])]
-    df_attacking = df[df["element_type"].isin([3, 4])]
+    # Ensure valid input data
+    if not squad or not isinstance(budget, (int, float)) or not isinstance(free_transfers, int):
+        return jsonify({"error": "Invalid input data"}), 400
+
+    df_defensive = df[df["element_type"].isin([1, 2])]  # Goalkeepers & Defenders
+    df_attacking = df[df["element_type"].isin([3, 4])]  # Midfielders & Forwards
+  
 
     def_features = ["now_cost", "form", "next_3_gw_fixtures", "clean_sheets", "saves"]
     att_features = ["now_cost", "form", "next_3_gw_fixtures", "expected_goals", "expected_assists", "threat"]
 
     # Scale Features
+    if not all(col in df.columns for col in def_features + att_features):
+        return jsonify({"error": "Some required features are missing from the dataset"}), 400
+
     X_def_scaled = scaler_defensive.transform(df_defensive[def_features])
     X_att_scaled = scaler_attacking.transform(df_attacking[att_features])
 
@@ -51,14 +61,13 @@ def predict_team():
     df = df[df["now_cost"] <= budget]
 
     # Exclude players already in squad
-    df = df[df["id"].isin(squad)]
+    df = df[~df["id"].isin(squad)]  # Correctly exclude players already in the squad
 
     # Sort by predicted points
     top_transfers = df.sort_values("predicted_points", ascending=False).head(free_transfers).to_dict(orient="records")
 
     return jsonify({"best_transfers": top_transfers})
 
-    #    Run the Flask app locally
-    if __name__ == "__main__":
-        app.run(debug=True)
-
+# Run the Flask app locally
+if __name__ == "__main__":
+    app.run(debug=True)
