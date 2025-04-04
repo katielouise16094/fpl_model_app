@@ -51,7 +51,7 @@ def predict_team():
     df = df[df["now_cost"] <= budget]
 
     # Exclude players already in squad
-    df = df[~df["id"].isin(squad)]
+    df = df[df["id"].isin(squad)]
 
     # Sort by predicted points
     top_transfers = df.sort_values("predicted_points", ascending=False).head(free_transfers).to_dict(orient="records")

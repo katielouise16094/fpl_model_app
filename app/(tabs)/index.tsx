@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, ActivityIndicator } from "react-native";
 import { useRoute } from "@react-navigation/native";
-import { ChatScreenRouteProp } from "../datatypes"; // Import type
+import { ChatScreenRouteProp } from "../datatypes";
 
-// Define the structure of a player
 type Player = {
   web_name: string;
   now_cost: number;
@@ -12,21 +11,27 @@ type Player = {
 
 export default function ChatScreen() {
   const route = useRoute<ChatScreenRouteProp>();
-  const { budget, freeTransfers, squad, chips } = route.params;
+  console.log(route.params);
 
-  // Explicitly type transfers as an array of Player objects OR null
+  const budget = route.params?.budget;
+  console.log(budget);
+
+  if (!budget) {
+    return <Text>Error: Budget is not defined</Text>;
+  }
+
   const [transfers, setTransfers] = useState<Player[] | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("http://localhost:5000/predict", {
+    fetch("http://localhost/5000/predict/", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ squad, budget, freeTransfers, chips }),
+      body: JSON.stringify({ squad: route.params.squad, budget, freeTransfers: route.params.freeTransfers, chips: route.params.chips }),
     })
       .then((res) => res.json())
       .then((data) => {
-        setTransfers(data.best_transfers || []); // Ensures it's always an array
+        setTransfers(data.best_transfers || []);
         setLoading(false);
       })
       .catch((error) => {
