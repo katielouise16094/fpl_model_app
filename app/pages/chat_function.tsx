@@ -14,19 +14,19 @@ export default function ChatScreen() {
   const route = useRoute<ChatScreenRouteProp>();
   const { budget, freeTransfers, squad, chips } = route.params;
 
-  // ✅ Explicitly type transfers as an array of Player objects OR null
+  // Explicitly type transfers as an array of Player objects OR null
   const [transfers, setTransfers] = useState<Player[] | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("https://fpl-improver.onrender.com", {
+    fetch("http://localhost:5000/predict", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ squad, budget, freeTransfers, chips }),
     })
       .then((res) => res.json())
       .then((data) => {
-        setTransfers(data.best_transfers || []); // ✅ Ensure it's always an array
+        setTransfers(data.best_transfers || []); // Ensures it's always an array
         setLoading(false);
       })
       .catch((error) => {

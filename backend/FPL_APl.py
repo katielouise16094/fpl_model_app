@@ -1,4 +1,3 @@
-import fastapi as FastAPI
 import joblib
 import pandas as pd
 from flask import Flask, request, jsonify
@@ -9,21 +8,30 @@ model_attacking = joblib.load("backend/attacking_model.pkl")
 scaler_defensive = joblib.load("backend/scaler_defensive.pkl")
 scaler_attacking = joblib.load("backend/scaler_attacking.pkl")
 
-
 # Sample FPL Players Database (for recommendations)
 df = pd.read_csv("backend/players.csv")
 
-app = FastAPI()
+# Initialize Flask app
+app = Flask(__name__)
 
-@app.get("/")
+@app.route("/", methods=["GET"])
 def home():
-    return {"message": "FPL AI API is running!"}
+    return jsonify({"message": "FPL AI API is running!"})
 
-@app.post("/predict")
-def predict_team(squad: list, budget: float, free_transfers: int, chips: list):
+@app.route("/predict", methods=["POST"])
+def predict_team():
     """
     Predicts best transfers based on user's current team, budget, and constraints.
     """
+    # Get the data from the POST request
+    data = request.get_json()
+
+    # Extract input parameters from the request
+    squad = data.get("squad", [])
+    budget = data.get("budget", 0.0)
+    free_transfers = data.get("free_transfers", 0)
+    chips = data.get("chips", [])
+
     df_defensive = df[df["element_type"].isin([1, 2])]
     df_attacking = df[df["element_type"].isin([3, 4])]
 
@@ -48,4 +56,9 @@ def predict_team(squad: list, budget: float, free_transfers: int, chips: list):
     # Sort by predicted points
     top_transfers = df.sort_values("predicted_points", ascending=False).head(free_transfers).to_dict(orient="records")
 
-    return {"best_transfers": top_transfers}
+    return jsonify({"best_transfers": top_transfers})
+
+    #    Run the Flask app locally
+    if __name__ == "__main__":
+        app.run(debug=True)
+
