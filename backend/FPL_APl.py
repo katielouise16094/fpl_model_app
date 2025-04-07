@@ -1,73 +1,122 @@
+import os
 import joblib
 import pandas as pd
 from flask import Flask, request, jsonify
+from flask_cors import CORS
+from werkzeug.exceptions import HTTPException
 
-# Load Models & Scalers
-model_defensive = joblib.load("backend/defensive_model.pkl")
-model_attacking = joblib.load("backend/attacking_model.pkl")
-scaler_defensive = joblib.load("backend/scaler_defensive.pkl")
-scaler_attacking = joblib.load("backend/scaler_attacking.pkl")
-
-# Sample FPL Players Database (for recommendations)
-df = pd.read_csv("backend/players.csv")
-print(df.head())  # Check the first few rows to see if data is loaded
-
-
-# Initialize Flask app
+# Initialize Flask app with CORS
 app = Flask(__name__)
+CORS(app)
 
-@app.route("/", methods=["GET"])
-def home():
-    return jsonify({"message": "FPL AI API is running!"})
+def load_models_and_data():
+    """Load models and data with proper error handling"""
+    try:
+        # Verify files exist
+        required_files = [
+            "backend/defensive_model.pkl",
+            "backend/attacking_model.pkl",
+            "backend/scaler_defensive.pkl",
+            "backend/scaler_attacking.pkl",
+            "backend/players.csv"
+        ]
+        
+        for file in required_files:
+            if not os.path.exists(file):
+                raise FileNotFoundError(f"Missing file: {file}")
+
+        # Load models and data
+        models = {
+            'defensive': joblib.load(required_files[0]),
+            'attacking': joblib.load(required_files[1]),
+            'scaler_defensive': joblib.load(required_files[2]),
+            'scaler_attacking': joblib.load(required_files[3])
+        }
+
+        df = pd.read_csv(required_files[4])
+        if df.empty:
+            raise ValueError("Player data CSV is empty")
+
+        return models, df
+
+    except Exception as e:
+        print(f"❌ Initialization error: {str(e)}")
+        raise
+
+# Load everything at startup
+try:
+    models, df = load_models_and_data()
+    print("✅ Models and data loaded successfully!")
+except Exception as e:
+    print(f"⚠️ Critical error during startup: {str(e)}")
+    models = None
+    df = None
 
 @app.route("/predict", methods=["POST"])
 def predict_team():
-    """
-    Predicts best transfers based on user's current team, budget, and constraints.
-    """
-    # Get the data from the POST request
-    data = request.get_json()
+    """Predict best transfers with proper DataFrame handling"""
+    if df is None or models is None:
+        return jsonify({"error": "Server not ready"}), 503
 
-    # Extract input parameters from the request
-    squad = data.get("squad", [])
-    budget = data.get("budget", 0.0)
-    free_transfers = data.get("free_transfers", 0)
-    chips = data.get("chips", [])
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
 
-    # Ensure valid input data
-    if not squad or not isinstance(budget, (int, float)) or not isinstance(free_transfers, int):
-        return jsonify({"error": "Invalid input data"}), 400
+        # Get parameters with validation
+        squad = data.get('squad', [])
+        budget = float(data.get('budget', 0))
+        free_transfers = int(data.get('free_transfers', 0))
+        
+        # Create copies of the filtered DataFrames to avoid SettingWithCopyWarning
+        df_defensive = df[df["element_type"].isin([1, 2])].copy()
+        df_attacking = df[df["element_type"].isin([3, 4])].copy()
 
-    df_defensive = df[df["element_type"].isin([1, 2])]  # Goalkeepers & Defenders
-    df_attacking = df[df["element_type"].isin([3, 4])]  # Midfielders & Forwards
-  
+        # Define features
+        def_features = ["now_cost", "form", "next_3_gw_fixtures", "clean_sheets", "saves"]
+        att_features = ["now_cost", "form", "next_3_gw_fixtures", "expected_goals", "expected_assists", "threat"]
 
-    def_features = ["now_cost", "form", "next_3_gw_fixtures", "clean_sheets", "saves"]
-    att_features = ["now_cost", "form", "next_3_gw_fixtures", "expected_goals", "expected_assists", "threat"]
+        # Scale features and predict - using .loc to avoid warnings
+        df_defensive.loc[:, "predicted_points"] = models['defensive'].predict(
+            models['scaler_defensive'].transform(df_defensive[def_features])
+        )
+        df_attacking.loc[:, "predicted_points"] = models['attacking'].predict(
+            models['scaler_attacking'].transform(df_attacking[att_features])
+        )
 
-    # Scale Features
-    if not all(col in df.columns for col in def_features + att_features):
-        return jsonify({"error": "Some required features are missing from the dataset"}), 400
+        # Combine predictions
+        df_full = pd.concat([df_defensive, df_attacking])
+        
+        # Apply filters
+        df_full = df_full[~df_full["id"].isin(squad)]
+        df_full = df_full[df_full["now_cost"] <= budget]
 
-    X_def_scaled = scaler_defensive.transform(df_defensive[def_features])
-    X_att_scaled = scaler_attacking.transform(df_attacking[att_features])
+        # Check if we have predictions
+        if 'predicted_points' not in df_full.columns:
+            raise ValueError("Prediction failed - no points calculated")
 
-    # Predict Points
-    df_defensive["predicted_points"] = model_defensive.predict(X_def_scaled)
-    df_attacking["predicted_points"] = model_attacking.predict(X_att_scaled)
-    df["predicted_points"] = df_defensive["predicted_points"].combine_first(df_attacking["predicted_points"])
+        # Get top transfers
+        top_transfers = (
+            df_full.sort_values("predicted_points", ascending=False)
+            .head(free_transfers)
+            .to_dict(orient="records")
+        )
 
-    # Filter players within budget
-    df = df[df["now_cost"] <= budget]
+        return jsonify({
+            "status": "success",
+            "best_transfers": top_transfers
+        })
 
-    # Exclude players already in squad
-    df = df[~df["id"].isin(squad)]  # Correctly exclude players already in the squad
+    except Exception as e:
+        app.logger.error(f"Prediction error: {str(e)}")
+        return jsonify({
+            "error": "Prediction failed",
+            "details": str(e)
+        }), 500
 
-    # Sort by predicted points
-    top_transfers = df.sort_values("predicted_points", ascending=False).head(free_transfers).to_dict(orient="records")
+@app.errorhandler(404)
+def not_found(e):
+    return jsonify({"error": "Endpoint not found"}), 404
 
-    return jsonify({"best_transfers": top_transfers})
-
-# Run the Flask app locally
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=False)

@@ -24,7 +24,7 @@ export default function ChatScreen() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("http://localhost/5000/predict/", {
+    fetch("https://9366-85-255-233-89.ngrok-free.app/predict", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ squad: route.params.squad, budget, freeTransfers: route.params.freeTransfers, chips: route.params.chips }),
