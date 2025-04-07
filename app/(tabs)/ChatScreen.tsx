@@ -31,7 +31,7 @@ export default function ChatScreen() {
     const fetchData = async () => {
       try {
         // First get the squad players with their predicted points
-        const squadResponse = await fetch("http://10.0.2.2:5000/squad-analysis", {
+        const squadResponse = await fetch("https://8a6e-87-242-173-26.ngrok-free.app/predict", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
