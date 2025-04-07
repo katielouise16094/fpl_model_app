@@ -31,11 +31,11 @@ X_attacking_scaled = scaler_attacking.fit_transform(X_attacking)
 
 # Train Models
 X_train_def, X_test_def, y_train_def, y_test_def = train_test_split(X_defensive_scaled, y_defensive, test_size=0.2, random_state=42)
-model_defensive = RandomForestRegressor(n_estimators=100, random_state=42)
+model_defensive = RandomForestRegressor(n_estimators=250, random_state=42)
 model_defensive.fit(X_train_def, y_train_def)
 
 X_train_att, X_test_att, y_train_att, y_test_att = train_test_split(X_attacking_scaled, y_attacking, test_size=0.2, random_state=42)
-model_attacking = RandomForestRegressor(n_estimators=100, random_state=42)
+model_attacking = RandomForestRegressor(n_estimators=250, random_state=42)
 model_attacking.fit(X_train_att, y_train_att)
 
 # Save Models
