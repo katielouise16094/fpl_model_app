@@ -45,7 +45,7 @@ def fetch_fpl_data():
     # Select relevant columns
     df = df[[
         "id", "web_name", "team", "element_type", "now_cost", "total_points",
-        "form", "ict_index", "influence", "creativity", "threat",
+        "form", "ict_index", "influence", "creativity", "threat","minutes",
         "expected_goals", "expected_assists", "expected_goal_involvements",
         "saves", "clean_sheets", "next_3_gw_fixtures"
     ]]

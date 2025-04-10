@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, ActivityIndicator, ScrollView, StyleSheet, TouchableOpacity } from "react-native";
+import { View, Text, ActivityIndicator, ScrollView, StyleSheet, TouchableOpacity, Alert } from "react-native";
 import { useRoute } from "@react-navigation/native";
 import { ChatScreenRouteProp } from "../datatypes";
 
@@ -35,7 +35,7 @@ export default function ChatScreen() {
         setLoading(true);
         setError(null);
     
-        // First get squad analysis
+        // 1. First get squad analysis
         const squadResponse = await fetch(`https://f825-87-242-173-26.ngrok-free.app/analyse-squad`, {
           method: 'POST',
           headers: { 
@@ -43,44 +43,54 @@ export default function ChatScreen() {
             'Accept': 'application/json'
           },
           body: JSON.stringify({
-            squad: route.params?.squad?.map(id => Number(id)) || []
+            squad: route.params?.squad || []
           }),
         });
     
-        const responseText = await squadResponse.text();
-        console.log("Raw response:", responseText);  // Debug log
-        
-        let squadData;
-        try {
-          squadData = JSON.parse(responseText);
-        } catch (e) {
-          throw new Error(`Invalid JSON response: ${responseText.substring(0, 100)}`);
-        }
-    
-        if (!squadResponse.ok) {
-          throw new Error(squadData.error || `HTTP error! status: ${squadResponse.status}`);
-        }
-    
-        console.log("Squad data:", squadData);  // Debug log
-        
-        if (!squadData.squad_players || !Array.isArray(squadData.squad_players)) {
-          throw new Error("Invalid squad players data received");
-        }
-    
-        // Verify predictions exist
-        const hasPredictions = squadData.squad_players.every(
-          (p: any) => typeof p.predicted_points === 'number'
-        );
-        
-        if (!hasPredictions) {
-          throw new Error("Some players are missing predicted points");
-        }
-    
+        const squadData = await squadResponse.json();
+        if (!squadResponse.ok) throw new Error(squadData.error || 'Squad analysis failed');
         setSquadPlayers(squadData.squad_players);
     
-        // Rest of your fetch logic...
+        // 2. Then get transfer suggestions 
+        const transfersResponse = await fetch(`https://f825-87-242-173-26.ngrok-free.app/predict`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({
+            squad: route.params?.squad || [],
+            budget: route.params?.budget || 0,
+            free_transfers: route.params?.freeTransfers || 1
+          }),
+        });
+    
+        const transfersData = await transfersResponse.json();
+        console.log("Transfer suggestions:", transfersData); // Debug log
+    
+        if (!transfersResponse.ok) {
+          throw new Error(transfersData.error || 'Transfer prediction failed');
+        }
+    
+        // Handle both response formats
+        if (transfersData.suggestions) {
+          setTransferSuggestions(transfersData.suggestions);
+        } else if (transfersData.message) {
+          Alert.alert("No Suggestions", transfersData.message);
+          setTransferSuggestions([]);
+        } else {
+          throw new Error("Unexpected response format");
+        }
+    
       } catch (err) {
-        console.error("API Error:", err);
+        console.error("API Error:", {
+          error: err,
+          requestData: {
+            squad: route.params?.squad,
+            budget: route.params?.budget,
+            freeTransfers: route.params?.freeTransfers
+          }
+        });
         setError(err instanceof Error ? err.message : "Unknown error");
       } finally {
         setLoading(false);
@@ -173,7 +183,7 @@ export default function ChatScreen() {
                       <Text style={styles.transferIn}>➕ {suggestion.player_in.web_name}</Text>
                     </View>
                     <View style={styles.transferDetails}>
-                      <Text>Cost: £{suggestion.cost_change.toFixed(1)}m</Text>
+                      <Text>Extra cost: £{suggestion.cost_change.toFixed(1)}m</Text>
                       <Text style={styles.pointsGain}>
                         +{suggestion.points_gain.toFixed(1)} pts
                       </Text>

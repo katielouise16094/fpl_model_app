@@ -57,6 +57,7 @@ def load_models_and_data():
         }
 
         df = pd.read_csv(required_files[4])
+        df['team_name'] = df['team'].map(TEAM_MAP)
         if df.empty:
             raise ValueError("Player data CSV is empty")
         
@@ -130,7 +131,7 @@ def analyse_squad():
             except Exception as e:
                 print(f"Error processing player {player_id}: {str(e)}")
                 continue
-                
+        
         return jsonify({
             "status": "success",
             "squad_players": squad_players
@@ -146,21 +147,29 @@ def analyse_squad():
 @app.route("/predict", methods=["POST"])
 def predict_transfers():
     try:
+        if not request.is_json:
+            return jsonify({
+                "status": "error",
+                "message": "Content-Type must be application/json"
+            }), 400
+
         data = request.get_json()
-        print("Received prediction request:", data)  # Debug log
-        
-        # Validate input
-        if not data or 'squad' not in data:
-            return jsonify({"error": "Missing squad data"}), 400
-            
+        print("Received prediction request:", data)
+
+        # Validate required fields
+        required_fields = ['squad', 'budget', 'free_transfers']
+        if not all(field in data for field in required_fields):
+            return jsonify({
+                "status": "error",
+                "message": f"Missing required fields. Needed: {required_fields}"
+            }), 400
+
         squad_ids = [int(id) for id in data.get('squad', [])]
         budget = float(data.get('budget', 0))
         free_transfers = int(data.get('free_transfers', 1))
-        
+
         # Get current squad with predictions
         df_squad = df[df["id"].isin(squad_ids)].copy()
-        if df_squad.empty:
-            return jsonify({"error": "No matching squad players found"}), 400
         
         # Predict points for current squad
         for _, player in df_squad.iterrows():
@@ -172,8 +181,10 @@ def predict_transfers():
             scaled_features = scaler.transform(player_features)
             df_squad.loc[player.name, 'predicted_points'] = model.predict(scaled_features)[0]
         
-        # Predict points for all available players
+        # Get all available players (not in squad)
         df_available = df[~df["id"].isin(squad_ids)].copy()
+        
+        # Predict points for available players
         df_defensive = df_available[df_available["element_type"].isin([1,2])].copy()
         df_attacking = df_available[df_available["element_type"].isin([3,4])].copy()
         
@@ -185,14 +196,33 @@ def predict_transfers():
             X_att = models['scaler_attacking'].transform(df_attacking[ATTACKING_FEATURES].fillna(0))
             df_available.loc[df_attacking.index, 'predicted_points'] = models['attacking'].predict(X_att)
         
-        # Generate suggestions
+        # Generate transfer suggestions with unique combinations
         suggestions = []
-        for _, squad_player in df_squad.iterrows():
-            same_position = df_available[df_available["element_type"] == squad_player["element_type"]]
-            affordable = same_position[same_position["now_cost"] <= (squad_player["now_cost"] + budget)]
-            best_options = affordable.sort_values("predicted_points", ascending=False).head(free_transfers)
+        used_players_out = set()
+        used_players_in = set()
+        
+        # Sort squad players by weakest first (lowest predicted points)
+        df_squad_sorted = df_squad.sort_values("predicted_points")
+        
+        for _, squad_player in df_squad_sorted.iterrows():
+            if squad_player["id"] in used_players_out:
+                continue
+                
+            # Find players of same position within budget
+            same_position = df_available[
+                (df_available["element_type"] == squad_player["element_type"]) &
+                (df_available["now_cost"] <= (squad_player["now_cost"] + budget)) &
+                (~df_available["id"].isin(used_players_in))
+            ]
             
-            for _, new_player in best_options.iterrows():
+            # Only suggest if there's a meaningful improvement (at least 0.5 points)
+            worthwhile_upgrades = same_position[
+                same_position["predicted_points"] > (squad_player["predicted_points"] + 0.5)
+            ]
+            
+            if not worthwhile_upgrades.empty:
+                best_option = worthwhile_upgrades.nlargest(1, "predicted_points").iloc[0]
+                
                 suggestions.append({
                     "player_out": {
                         "id": int(squad_player["id"]),
@@ -204,30 +234,44 @@ def predict_transfers():
                         "team_name": str(squad_player["team_name"])
                     },
                     "player_in": {
-                        "id": int(new_player["id"]),
-                        "web_name": str(new_player["web_name"]),
-                        "now_cost": float(new_player["now_cost"]),
-                        "predicted_points": float(new_player["predicted_points"]),
-                        "element_type": int(new_player["element_type"]),
-                        "position": ["GK", "DEF", "MID", "FWD"][new_player["element_type"]-1],
-                        "team_name": str(new_player["team_name"])
+                        "id": int(best_option["id"]),
+                        "web_name": str(best_option["web_name"]),
+                        "now_cost": float(best_option["now_cost"]),
+                        "predicted_points": float(best_option["predicted_points"]),
+                        "element_type": int(best_option["element_type"]),
+                        "position": ["GK", "DEF", "MID", "FWD"][best_option["element_type"]-1],
+                        "team_name": str(best_option["team_name"])
                     },
-                    "points_gain": float(new_player["predicted_points"] - squad_player["predicted_points"]),
-                    "cost_change": float(new_player["now_cost"] - squad_player["now_cost"])
+                    "points_gain": float(best_option["predicted_points"] - squad_player["predicted_points"]),
+                    "cost_change": float(best_option["now_cost"] - squad_player["now_cost"])
                 })
+                
+                # Mark these players as used
+                used_players_out.add(squad_player["id"])
+                used_players_in.add(best_option["id"])
+                
+                # Stop if we have enough suggestions
+                if len(suggestions) >= free_transfers * 2:  # Get extra options
+                    break
+
+        # Sort all suggestions by points gain
+        suggestions_sorted = sorted(suggestions, key=lambda x: x["points_gain"], reverse=True)
         
+        # Return only the requested number of transfers
         return jsonify({
             "status": "success",
-            "suggestions": sorted(suggestions, key=lambda x: x["points_gain"], reverse=True)[:free_transfers*3]
+            "suggestions": suggestions_sorted[:free_transfers]
         })
         
     except Exception as e:
-        print(f"Prediction error: {str(e)}")
-        return jsonify({
-            "error": "Transfer prediction failed",
-            "details": str(e),
-            "request_data": data
-        }), 500
+        return jsonify({"error": str(e)}), 500
+    
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
+    response.headers.add('Access-Control-Allow-Methods', 'POST, OPTIONS')
+    return response
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)

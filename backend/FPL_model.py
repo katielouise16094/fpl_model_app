@@ -40,43 +40,64 @@ print(df_attacking[ATTACKING_FEATURES].isnull().sum())
 df_defensive[DEFENSIVE_FEATURES] = df_defensive[DEFENSIVE_FEATURES].fillna(0)
 df_attacking[ATTACKING_FEATURES] = df_attacking[ATTACKING_FEATURES].fillna(0)
 
-# Function to estimate expected points for attacking players
-def estimate_attacking_expected_points(row):
-    form = float(row.get("form", 0))
-    threat = float(row.get("threat", 0))
-    xG = float(row.get("expected_goals", 0))
-    xA = float(row.get("expected_assists", 0))
-    fixture_difficulty = float(row.get("next_3_gw_fixtures", 3))
+# Function to estimate expected points 
+# Update these functions in FPL_model.py
 
-    # Fixture Modifier: scale 1.5x for easiest fixtures, 0.75x for hardest
-    fixture_modifier = max(0.5, 1.5 - (fixture_difficulty - 3) * 0.25)
-
-    # Bonus for attacking players: goals, assists, and threat
-    bonus = (xG * 1.6) + (xA * 1.3) + (threat * 0.01)
-
-    # Final expected points over next 3 GWs
-    expected_points = (form * 1.2 + bonus) * fixture_modifier
-    return round(expected_points, 2)
-
-# Function to estimate expected points for defensive players
 def estimate_defensive_expected_points(row):
-    form = float(row.get("form", 0))
-    saves = float(row.get("saves", 0))
+    # Extract data (convert to float to avoid NaN issues)
+    form = float(row.get("form", 0))          # form is already per-game
+    saves = float(row.get("saves", 0))        
     clean_sheets = float(row.get("clean_sheets", 0))
-    xG = float(row.get("expected_goals", 0))  # For defenders, we could include xG
-    xA = float(row.get("expected_assists", 0))  # Same for assists
-    fixture_difficulty = float(row.get("next_3_gw_fixtures", 3))
-
-    # Fixture Modifier: scale 1.5x for easiest fixtures, 0.75x for hardest
-    fixture_modifier = max(0.5, 1.5 - (fixture_difficulty - 3) * 0.25)
-
-    # For defensive players: clean sheets and saves are key
-    bonus = (clean_sheets * 1.5) + (saves * 0.4) + (xG * 0.5) + (xA * 0.6)
-
-    # Final expected points over the next 3 GWs
-    expected_points = (form * 1.2 + bonus) * fixture_modifier
+    fixture_diff = float(row.get("next_3_gw_fixtures", 3))
+    minutes = float(row.get("minutes", 0))    
+    
+    # Calculate per-game averages 
+    games_played = max(1, minutes / 90)      # estimate games played
+    saves_per_game = saves / games_played
+    cs_per_game = clean_sheets / games_played
+    
+    # Points calculation (scaled to 3 GWs)
+    base_points = form * 3                  # form is  per-GW
+    saves_points = saves_per_game * 3 
+    cs_points = cs_per_game * 3 * 4.5           
+    
+    # Fixture modifier 
+    fixture_modifier = max(0.8, 1.2 - (fixture_diff - 3) * 0.1)
+    
+    # Total expected points
+    expected_points = ((base_points + saves_points + cs_points) * fixture_modifier)*0.6
+    expected_points *= min(1.0, minutes / (3 * 90)) 
+    
     return round(expected_points, 2)
 
+def estimate_attacking_expected_points(row):
+    # Extract data
+    form = float(row.get("form", 0))          # form is per-game
+    threat = float(row.get("threat", 0))
+    xG = float(row.get("expected_goals", 0))  
+    xA = float(row.get("expected_assists", 0))
+    fixture_diff = float(row.get("next_3_gw_fixtures", 3))
+    minutes = float(row.get("minutes", 0))    
+    
+    # Per-game averages
+    games_played = max(1, minutes / 90)
+    xG_per_game = xG / games_played
+    xA_per_game = xA / games_played
+    
+    # Points calculation (3 GWs)
+    base_points = form * 2.4                  
+    xG_points = xG_per_game * 3 * 4          
+    xA_points = xA_per_game * 3 * 3           
+    threat_points = threat * 0.01             
+    
+    # Fixture modifier
+    fixture_modifier = max(0.7, 1.3 - (fixture_diff - 3) * 0.15)
+    
+    # Total expected points 
+    expected_points = ((base_points + xG_points + xA_points + threat_points) * fixture_modifier)*0.5
+    expected_points *= min(1.0, minutes / (3 * 90))  
+    
+    return round(expected_points, 2)
 # Estimate expected points for each player
 df_defensive.loc[:, "expected_points_next_3_gw"] = df_defensive.apply(estimate_defensive_expected_points, axis=1)
 df_attacking.loc[:, "expected_points_next_3_gw"] = df_attacking.apply(estimate_attacking_expected_points, axis=1)
