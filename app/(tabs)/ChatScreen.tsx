@@ -141,7 +141,7 @@ export default function ChatScreen() {
       <View style={styles.summaryCard}>
         <Text style={styles.summaryTitle}>Squad Summary</Text>
         <View style={styles.summaryRow}>
-          <Text>Total Predicted Points:</Text>
+          <Text>Total Predicted Points Over Next 3 GameWeeks:</Text>
           <Text style={styles.summaryValue}>
             {squadPlayers.reduce((sum, player) => sum + (player.predicted_points || 0), 0).toFixed(1)}
           </Text>
@@ -151,7 +151,7 @@ export default function ChatScreen() {
           <Text style={styles.summaryValue}>£{route.params?.budget?.toFixed(1) || '0.0'}m</Text>
         </View>
         <View style={styles.summaryRow}>
-          <Text>Free Transfers:</Text>
+          <Text>Transfers:</Text>
           <Text style={styles.summaryValue}>{route.params?.freeTransfers || 1}</Text>
         </View>
       </View>

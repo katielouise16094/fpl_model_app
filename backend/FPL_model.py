@@ -11,7 +11,8 @@ DEFENSIVE_FEATURES = [
     "form", 
     "next_3_gw_fixtures", 
     "clean_sheets", 
-    "saves"
+    "saves",
+    "expected_assists"
 ]
 
 ATTACKING_FEATURES = [
@@ -49,17 +50,21 @@ def estimate_defensive_expected_points(row):
     saves = float(row.get("saves", 0))        
     clean_sheets = float(row.get("clean_sheets", 0))
     fixture_diff = float(row.get("next_3_gw_fixtures", 3))
-    minutes = float(row.get("minutes", 0))    
+    minutes = float(row.get("minutes", 0)) 
+    expected_assists = float(row.get("expected_assists", 0))   
     
     # Calculate per-game averages 
     games_played = max(1, minutes / 90)      # estimate games played
     saves_per_game = saves / games_played
     cs_per_game = clean_sheets / games_played
+    expected_assists_per_game = expected_assists / games_played
     
     # Points calculation (scaled to 3 GWs)
     base_points = form * 3                  # form is  per-GW
     saves_points = saves_per_game * 3 
-    cs_points = cs_per_game * 3 * 4.5           
+    cs_points = cs_per_game * 3 * 4
+    expected_assists_points = expected_assists_per_game * 3 * 0.2
+            
     
     # Fixture modifier 
     fixture_modifier = max(0.8, 1.2 - (fixture_diff - 3) * 0.1)

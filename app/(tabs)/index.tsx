@@ -211,7 +211,7 @@ const handleGetAdvice = () => {
               onSubmitEditing={Keyboard.dismiss}
             />
 
-            <Text style={styles.budgetLabel}>Free transfers available:</Text>
+            <Text style={styles.budgetLabel}>Number of Transfers to Make:</Text>
             <TextInput
               style={styles.budgetInput}
               keyboardType="numeric"
