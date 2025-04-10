@@ -1,51 +1,27 @@
-# Welcome to your Expo app 👋
+# FPL Improver App
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+This is an expo application using react native typscript, which is fully functional on mobile. The model is trained using scikit_learn in python and the web scraper used pandas, with the api being initialised using flask. OS is used in the background for working in conjuction with the operating system and joblib allows for for loops working in parallel.
 
-## Get started
+# Steps
 
-1. Install dependencies
+Step 1: Run the FPL_Scraper to ensure the most up-to-date CSV file.  
+Step 2: Run the FPL_Model to update scalers and models with up to date.  
+Step 3: Run the FPL_API to run to localhost  
+Step 4: Run the application (terminal input below)  
 
-   ```bash
-   npm install
-   ```
+Note: this model will only work apprporiately whilst there are fixtures left in the season - as it takes an average fixture difficulty over the next 3 gameweeks, at the end of the season this will result in incorrect outputs.  
 
-2. Start the app
+Dependencies/libraries in python that must be installed for this program to run include pandas,numpy,flask,joblib,os,scikit-learn,requests  
+Other requirements include ngrok being installed , expo-router, react-native  
 
-   ```bash
-    npx expo start
-   ```
 
-In the output, you'll find options to open the app in a
+you'll be able to open the app in:
 
 - [development build](https://docs.expo.dev/develop/development-builds/introduction/)
 - [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
 - [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
 - [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+- to do this you'll need to type npx expo start into the terminal
 
-## Get a fresh project
 
-When you're ready, run:
-
-```bash
-npm run reset-project
-```
-
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
-# fpl-improver
