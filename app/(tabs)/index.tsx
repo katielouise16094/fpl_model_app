@@ -99,25 +99,26 @@ export default function TeamSelection() {
     }
   };
 
-  const handleGetAdvice = () => {
-    Keyboard.dismiss();
-    
-    if (isNaN(parseFloat(remainingBudget))) {
-      Alert.alert("Invalid Budget", "Please enter a valid remaining budget");
-      return;
-    }
-    if (selectedSquad.length < 15) {
-      Alert.alert("Incomplete Squad", "Please select a full squad of 15 players.");
-      return;
-    }
 
-    navigation.navigate("ChatScreen", {
-      budget: parseFloat(remainingBudget),
-      freeTransfers: parseInt(freeTransfers) || 1,
-      squad: selectedSquad.map((p) => p.id),
-      chips: [],
-    });
-  };
+const handleGetAdvice = () => {
+  Keyboard.dismiss();
+  
+  if (isNaN(parseFloat(remainingBudget))) {
+    Alert.alert("Invalid Budget", "Please enter a valid remaining budget");
+    return;
+  }
+  if (selectedSquad.length < 15) {
+    Alert.alert("Incomplete Squad", "Please select a full squad of 15 players.");
+    return;
+  }
+
+  navigation.navigate("ChatScreen", {
+    budget: parseFloat(remainingBudget),
+    freeTransfers: parseInt(freeTransfers) || 1,
+    squad: selectedSquad.map(p => Number(p.id)),
+    chips: [],
+  });
+};
 
   const PositionSelector = ({ position }: { position: number }) => (
     <View style={styles.positionTab}>

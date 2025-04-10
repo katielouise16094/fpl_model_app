@@ -5,12 +5,40 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestRegressor
 
+# Feature definitions - must match model training
+DEFENSIVE_FEATURES = [
+    "now_cost", 
+    "form", 
+    "next_3_gw_fixtures", 
+    "clean_sheets", 
+    "saves"
+]
+
+ATTACKING_FEATURES = [
+    "now_cost",
+    "form",
+    "next_3_gw_fixtures",
+    "expected_goals",
+    "expected_assists",
+    "threat"
+]
+
 # Load scraped data
 df = pd.read_csv("/Users/katiepowl/fpl-improver/backend/players.csv")
 
 # Split into Defensive & Attacking Players (Ensure using copies to avoid SettingWithCopyWarning)
 df_defensive = df[df["element_type"].isin([1, 2])].copy()  # Goalkeepers & Defenders
 df_attacking = df[df["element_type"].isin([3, 4])].copy()  # Midfielders & Forwards
+
+print("Checking for missing values in defensive features:")
+print(df_defensive[DEFENSIVE_FEATURES].isnull().sum())
+
+print("\nChecking for missing values in attacking features:")
+print(df_attacking[ATTACKING_FEATURES].isnull().sum())
+
+# Fill any missing values before training
+df_defensive[DEFENSIVE_FEATURES] = df_defensive[DEFENSIVE_FEATURES].fillna(0)
+df_attacking[ATTACKING_FEATURES] = df_attacking[ATTACKING_FEATURES].fillna(0)
 
 # Function to estimate expected points for attacking players
 def estimate_attacking_expected_points(row):

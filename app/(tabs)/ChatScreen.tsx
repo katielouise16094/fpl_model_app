@@ -3,6 +3,7 @@ import { View, Text, ActivityIndicator, ScrollView, StyleSheet, TouchableOpacity
 import { useRoute } from "@react-navigation/native";
 import { ChatScreenRouteProp } from "../datatypes";
 
+
 type Player = {
   id: number;
   web_name: string;
@@ -17,6 +18,7 @@ type TransferSuggestion = {
   player_out: Player;
   player_in: Player;
   points_gain: number;
+  cost_change: number;
 };
 
 export default function ChatScreen() {
@@ -30,37 +32,56 @@ export default function ChatScreen() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // First get the squad players with their predicted points
-        const squadResponse = await fetch("https://8a6e-87-242-173-26.ngrok-free.app/predict", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+        setLoading(true);
+        setError(null);
+    
+        // First get squad analysis
+        const squadResponse = await fetch(`https://f825-87-242-173-26.ngrok-free.app/analyse-squad`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
           body: JSON.stringify({
-            squad: route.params?.squad || [],
+            squad: route.params?.squad?.map(id => Number(id)) || []
           }),
         });
-
-        if (!squadResponse.ok) throw new Error("Failed to analyze squad");
-        const squadData = await squadResponse.json();
+    
+        const responseText = await squadResponse.text();
+        console.log("Raw response:", responseText);  // Debug log
+        
+        let squadData;
+        try {
+          squadData = JSON.parse(responseText);
+        } catch (e) {
+          throw new Error(`Invalid JSON response: ${responseText.substring(0, 100)}`);
+        }
+    
+        if (!squadResponse.ok) {
+          throw new Error(squadData.error || `HTTP error! status: ${squadResponse.status}`);
+        }
+    
+        console.log("Squad data:", squadData);  // Debug log
+        
+        if (!squadData.squad_players || !Array.isArray(squadData.squad_players)) {
+          throw new Error("Invalid squad players data received");
+        }
+    
+        // Verify predictions exist
+        const hasPredictions = squadData.squad_players.every(
+          (p: any) => typeof p.predicted_points === 'number'
+        );
+        
+        if (!hasPredictions) {
+          throw new Error("Some players are missing predicted points");
+        }
+    
         setSquadPlayers(squadData.squad_players);
-
-        // Then get transfer suggestions
-        const transfersResponse = await fetch("http://10.0.2.2:5000/transfer-suggestions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            squad: route.params?.squad || [],
-            budget: route.params?.budget || 0,
-            free_transfers: route.params?.freeTransfers || 1,
-          }),
-        });
-
-        if (!transfersResponse.ok) throw new Error("Failed to get transfer suggestions");
-        const transfersData = await transfersResponse.json();
-        setTransferSuggestions(transfersData.suggestions);
-
+    
+        // Rest of your fetch logic...
       } catch (err) {
         console.error("API Error:", err);
-        setError((err as Error).message || "An error occurred");
+        setError(err instanceof Error ? err.message : "Unknown error");
       } finally {
         setLoading(false);
       }
@@ -68,6 +89,17 @@ export default function ChatScreen() {
 
     fetchData();
   }, [route.params]);
+
+
+  const toggleExpandPlayer = (playerId: number) => {
+    setExpandedPlayer(expandedPlayer === playerId ? null : playerId);
+  };
+
+  const getSuggestionsForPlayer = (playerId: number) => {
+    return transferSuggestions
+      .filter(suggestion => suggestion.player_out.id === playerId)
+      .sort((a, b) => b.points_gain - a.points_gain);
+  };
 
   if (loading) {
     return (
@@ -82,19 +114,15 @@ export default function ChatScreen() {
     return (
       <View style={styles.container}>
         <Text style={styles.errorText}>Error: {error}</Text>
+        <TouchableOpacity 
+          style={styles.retryButton}
+          onPress={() => window.location.reload()}
+        >
+          <Text style={styles.retryButtonText}>Try Again</Text>
+        </TouchableOpacity>
       </View>
     );
   }
-
-  const toggleExpandPlayer = (playerId: number) => {
-    setExpandedPlayer(expandedPlayer === playerId ? null : playerId);
-  };
-
-  const getSuggestionsForPlayer = (playerId: number) => {
-    return transferSuggestions
-      .filter(suggestion => suggestion.player_out.id === playerId)
-      .sort((a, b) => b.points_gain - a.points_gain);
-  };
 
   return (
     <ScrollView style={styles.container}>
@@ -105,12 +133,12 @@ export default function ChatScreen() {
         <View style={styles.summaryRow}>
           <Text>Total Predicted Points:</Text>
           <Text style={styles.summaryValue}>
-            {squadPlayers.reduce((sum, player) => sum + player.predicted_points, 0).toFixed(1)}
+            {squadPlayers.reduce((sum, player) => sum + (player.predicted_points || 0), 0).toFixed(1)}
           </Text>
         </View>
         <View style={styles.summaryRow}>
           <Text>Remaining Budget:</Text>
-          <Text style={styles.summaryValue}>£{route.params?.budget?.toFixed(1)}m</Text>
+          <Text style={styles.summaryValue}>£{route.params?.budget?.toFixed(1) || '0.0'}m</Text>
         </View>
         <View style={styles.summaryRow}>
           <Text>Free Transfers:</Text>
@@ -128,7 +156,7 @@ export default function ChatScreen() {
                 {player.web_name} ({player.position})
               </Text>
               <Text style={styles.playerPoints}>
-                {player.predicted_points.toFixed(1)} pts
+                {player.predicted_points?.toFixed(1) || '0.0'} pts
               </Text>
             </View>
           </TouchableOpacity>
@@ -145,7 +173,7 @@ export default function ChatScreen() {
                       <Text style={styles.transferIn}>➕ {suggestion.player_in.web_name}</Text>
                     </View>
                     <View style={styles.transferDetails}>
-                      <Text>Cost: £{(suggestion.player_in.now_cost - suggestion.player_out.now_cost).toFixed(1)}m</Text>
+                      <Text>Cost: £{suggestion.cost_change.toFixed(1)}m</Text>
                       <Text style={styles.pointsGain}>
                         +{suggestion.points_gain.toFixed(1)} pts
                       </Text>
@@ -162,21 +190,25 @@ export default function ChatScreen() {
 
       <View style={styles.bestTransfersCard}>
         <Text style={styles.subHeader}>Top Overall Transfers</Text>
-        {transferSuggestions
-          .sort((a, b) => b.points_gain - a.points_gain)
-          .slice(0, 3)
-          .map((suggestion, index) => (
-            <View key={index} style={styles.bestSuggestion}>
-              <Text style={styles.bestTransferText}>
-                Replace <Text style={styles.bold}>{suggestion.player_out.web_name}</Text> with{' '}
-                <Text style={styles.bold}>{suggestion.player_in.web_name}</Text>
-              </Text>
-              <Text style={styles.bestTransferDetails}>
-                Cost: £{(suggestion.player_in.now_cost - suggestion.player_out.now_cost).toFixed(1)}m • 
-                Points Gain: +{suggestion.points_gain.toFixed(1)}
-              </Text>
-            </View>
-          ))}
+        {transferSuggestions.length > 0 ? (
+          transferSuggestions
+            .sort((a, b) => b.points_gain - a.points_gain)
+            .slice(0, 3)
+            .map((suggestion, index) => (
+              <View key={index} style={styles.bestSuggestion}>
+                <Text style={styles.bestTransferText}>
+                  Replace <Text style={styles.bold}>{suggestion.player_out.web_name}</Text> with{' '}
+                  <Text style={styles.bold}>{suggestion.player_in.web_name}</Text>
+                </Text>
+                <Text style={styles.bestTransferDetails}>
+                  Cost: £{suggestion.cost_change.toFixed(1)}m • 
+                  Points Gain: +{suggestion.points_gain.toFixed(1)}
+                </Text>
+              </View>
+            ))
+        ) : (
+          <Text style={styles.noSuggestions}>No transfer suggestions available</Text>
+        )}
       </View>
     </ScrollView>
   );
@@ -209,6 +241,17 @@ const styles = StyleSheet.create({
     color: 'red',
     textAlign: 'center',
     marginTop: 16,
+  },
+  retryButton: {
+    backgroundColor: '#1a73e8',
+    padding: 12,
+    borderRadius: 6,
+    marginTop: 16,
+    alignSelf: 'center',
+  },
+  retryButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
   },
   summaryCard: {
     backgroundColor: 'white',
