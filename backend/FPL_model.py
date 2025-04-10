@@ -70,7 +70,7 @@ def estimate_defensive_expected_points(row):
     fixture_modifier = max(0.8, 1.2 - (fixture_diff - 3) * 0.1)
     
     # Total expected points
-    expected_points = ((base_points + saves_points + cs_points) * fixture_modifier)*0.7
+    expected_points = ((base_points + saves_points + cs_points + expected_assists_points) * fixture_modifier)*0.7
     expected_points *= min(1.0, minutes / (3 * 90)) 
     
     return round(expected_points, 2)
